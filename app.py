@@ -260,6 +260,27 @@ import re
 from io import BytesIO
 import tempfile
 
+def add_math_symbols_to_doc(paragraph, text):  
+    """  
+    A function to ensure math symbols and equations are correctly added to a Word document.  
+    """  
+    parts = re.split(r'(\$[^\$]*\$)', text)  # Split by TeX math delimiters  
+    for part in parts:  
+        if part.startswith('$') and part.endswith('$'):  
+            latex_text = part.strip('$')  
+            # Convert LaTeX to OMML (Office Math Markup Language)  
+            omml = LatexNodes2Text().latex_to_text(latex_text)  
+            math_element = OxmlElement('m:oMathPara')  
+            math_run = OxmlElement('m:oMath')  
+            math_text = OxmlElement('m:t')  
+            math_text.text = omml  
+            math_run.append(math_text)  
+            math_element.append(math_run)  
+            paragraph._element.append(math_element)  
+        else:  
+            run = paragraph.add_run(part)  
+    return paragraph  
+
 def create_doc_from_ppt(pptx_file):
     prs = Presentation(pptx_file)
     doc = Document()  
@@ -277,14 +298,16 @@ def create_doc_from_ppt(pptx_file):
     
     for i, (slide_number, slide_title, slide_text) in enumerate(slides_data):
         # Add slide title and content
-        doc.add_heading(f'Slide {slide_number}: {slide_title}', level=1)
-        
+        paragraph = doc.add_paragraph() 
+        sanitized_slide_title = sanitize_text(slide_title if slide_title else "Untitled Slide")  
+        run = paragraph.add_run(f"[{slide_number}, {sanitized_slide_title}] ") 
+                
         # Sanitize and add slide text
         cleaned_slide_text = sanitize_text(slide_text)
         
         # Add explanation
         explanation = generate_explanation(cleaned_slide_text, slide_number)
-        doc.add_paragraph(explanation)
+        add_math_symbols_to_doc(paragraph, explanation)
         
         # Collect references to images and tables for later output
         if slide_images[i]['tables']:
